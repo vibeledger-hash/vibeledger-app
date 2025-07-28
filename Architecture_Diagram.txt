@@ -1,0 +1,28 @@
+# MicroShield Payments — Architecture Diagram (ASCII)
+
+```
++-------------------+         +-------------------+         +-------------------+
+|   React Native    |  REST   | Google API GW     |  Cloud  | Google Cloud      |
+|   Mobile App      +-------->+ (API Gateway)     +-------->+ Functions         |
+|                   |         |                   |         | (Node.js)         |
++--------+----------+         +-------------------+         +--------+----------+
+         | BLE/QR                                                |
+         v                                                       v
++-------------------+                                    +-------------------+
+|  Android BLE      |                                    | Cloud SQL /       |
+|  (react-native-   |                                    | Firestore         |
+|  ble-plx)         |                                    +-------------------+
++-------------------+                                            |
+         |                                                    +-------------------------------+
+         v                                                    | GCM (Firebase Cloud Messaging) |
++-------------------+                                         +-------------------------------+
+|  SQLite (Offline) |
+|  (react-native-   |
+|  sqlite-storage)  |
++-------------------+
+```
+
+- Mobile app uses BLE/QR for proximity, stores offline data in SQLite
+- Communicates with Google API Gateway, which triggers Google Cloud Functions
+- Cloud Functions handle business logic, interact with Cloud SQL/Firestore and GCM (Firebase Cloud Messaging) for OTP and push notifications
+- All flows JWT-protected except OTP requests
