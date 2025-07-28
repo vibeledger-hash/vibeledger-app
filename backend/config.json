@@ -1,0 +1,68 @@
+{
+  "development": {
+    "backend": {
+      "baseUrl": "http://localhost:3000",
+      "endpoints": {
+        "health": "/health",
+        "auth": {
+          "requestOtp": "/api/auth/request-otp",
+          "verifyOtp": "/api/auth/verify-otp",
+          "refresh": "/api/auth/refresh"
+        },
+        "wallet": {
+          "balance": "/api/wallet/balance",
+          "history": "/api/wallet/history",
+          "info": "/api/wallet/info",
+          "lock": "/api/wallet/lock",
+          "unlock": "/api/wallet/unlock"
+        },
+        "transaction": {
+          "initiate": "/api/transaction/initiate",
+          "confirm": "/api/transaction/confirm",
+          "sync": "/api/transaction/sync",
+          "get": "/api/transaction/:id"
+        },
+        "ble": {
+          "discover": "/api/ble/discover",
+          "register": "/api/ble/register",
+          "merchant": "/api/ble/merchant/:id",
+          "categories": "/api/ble/categories"
+        }
+      }
+    },
+    "database": {
+      "seeded": true,
+      "testUser": {
+        "phoneNumber": "+1234567890",
+        "walletBalance": 1000.00,
+        "currency": "USD"
+      },
+      "sampleMerchants": [
+        {
+          "name": "Coffee Corner",
+          "category": "Food & Beverage",
+          "bleId": "ble_coffee_001",
+          "qrCode": "QR_COFFEE_001"
+        },
+        {
+          "name": "Tech Store", 
+          "category": "Electronics",
+          "bleId": "ble_tech_001",
+          "qrCode": "QR_TECH_001"
+        },
+        {
+          "name": "Local Grocery",
+          "category": "Grocery", 
+          "bleId": "ble_grocery_001",
+          "qrCode": "QR_GROCERY_001"
+        }
+      ]
+    }
+  },
+  "production": {
+    "backend": {
+      "baseUrl": "https://your-aws-lambda-url.execute-api.region.amazonaws.com/prod",
+      "endpoints": "same as development"
+    }
+  }
+}

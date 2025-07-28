@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "name": "microshield-backend",
+  "builds": [
+    {
+      "src": "standalone-server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/standalone-server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/standalone-server.js"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "standalone-server.js": {
+      "maxDuration": 10
+    }
+  }
+}
