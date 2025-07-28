@@ -6,7 +6,7 @@ import { getToken } from './jwtService';
 const API_CONFIG = {
   baseURL: __DEV__ 
     ? 'http://localhost:3000/api'  // Development
-    : 'https://your-production-api.com/api', // Production
+    : 'https://vibeledger-app.onrender.com/api', // Production - LIVE!
   timeout: 10000,
 };
 
