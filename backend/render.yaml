@@ -8,4 +8,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: JWT_SECRET
+        value: 0d87884270dc6db52f58454d0cd84e4d
+      - key: JWT_EXPIRES_IN
+        value: 24h
     autoDeploy: true
