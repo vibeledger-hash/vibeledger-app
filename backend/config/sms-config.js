@@ -54,7 +54,7 @@ class SMSConfig {
       isRealSMS: this.isRealSMSEnabled(),
       message: this.isRealSMSEnabled() 
         ? `✅ Real SMS enabled with providers: ${this.providers.join(', ')}`
-        : '⚠️ Running in DEMO mode - configure SMS providers to enable real SMS'
+        : '⚠️ SMS fallback mode - configure SMS providers to enable real SMS'
     };
   }
 }

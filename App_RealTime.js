@@ -110,12 +110,12 @@ function App() {
         } else {
           // Fallback to config-based detection
           setIsRealSMSMode(!CONFIG.DEMO_MODE);
-          console.log('📱 Using config-based SMS mode:', !CONFIG.DEMO_MODE);
+          console.log('📱 Using config-based SMS setup:', !CONFIG.DEMO_MODE);
         }
       } catch (configError) {
         // Fallback to config-based detection
         setIsRealSMSMode(!CONFIG.DEMO_MODE);
-        console.log('📱 Using config-based SMS mode (fallback):', !CONFIG.DEMO_MODE);
+        console.log('📱 Using config-based SMS setup (fallback):', !CONFIG.DEMO_MODE);
       }
     } catch (error) {
       console.error('❌ Failed to check SMS provider:', error);
@@ -408,14 +408,11 @@ function App() {
           <Text style={styles.title}>VibeLedger Merchant</Text>
           <Text style={styles.subtitle}>Enter your phone number to get started</Text>
           
-          {/* Status Notice */}
+          {/* Connection Status */}
           <View style={[styles.customerBalanceContainer, { marginBottom: 20 }]}>
-            <Text style={styles.customerBalanceLabel}>
-              {isRealSMSMode ? '✅ Live Mode Active' : '🚀 Demo Mode Active'}
-            </Text>
             <Text style={styles.customerBalanceAmount}>Real-time Backend Connected</Text>
             <Text style={styles.customerBalanceSubtext}>
-              {isRealSMSMode ? 'Real SMS will be sent to your phone' : 'Next step: OTP will be 123456'}
+              SMS verification ready
             </Text>
           </View>
           
@@ -492,17 +489,6 @@ function App() {
               editable={!loading}
             />
           </View>
-          
-          {/* Quick Fill Button - Only show in demo mode */}
-          {!isRealSMSMode && (
-            <TouchableOpacity 
-              style={[styles.secondaryButton, { backgroundColor: '#27ae60', marginTop: 10, paddingVertical: 10, borderRadius: 8 }]}
-              onPress={() => setOtp('123456')}
-              disabled={loading}
-            >
-              <Text style={[styles.primaryButtonText, { color: '#fff' }]}>Fill Demo OTP</Text>
-            </TouchableOpacity>
-          )}
           
           <TouchableOpacity 
             style={[styles.primaryButton, loading && styles.disabledButton]}

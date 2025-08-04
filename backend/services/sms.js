@@ -24,7 +24,7 @@ class SMSService {
         this.setupVonage();
         break;
       default:
-        console.log('📱 SMS Service: Running in DEMO mode');
+        console.log('📱 SMS Service: No valid SMS provider configured');
     }
   }
 
@@ -225,15 +225,15 @@ class SMSService {
   }
 
   sendViaDemo(phoneNumber, otp) {
-    console.log('🎭 DEMO MODE: OTP would be sent to', phoneNumber);
-    console.log('🔑 Demo OTP:', otp);
+    console.log('🎭 Fallback: OTP would be sent to', phoneNumber);
+    console.log('🔑 OTP:', otp);
     
     return {
       success: true,
       provider: 'demo',
       messageId: `demo_${Date.now()}`,
-      message: 'OTP generated (Demo mode - check console)',
-      demoOTP: otp // Only in demo mode
+      message: 'OTP generated (check console)',
+      demoOTP: otp
     };
   }
 }

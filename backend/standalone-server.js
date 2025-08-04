@@ -95,7 +95,7 @@ app.post('/api/auth/request-otp', async (req, res) => {
         expiresIn: 300, // 5 minutes
         phoneNumber: phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), // Mask phone number
         provider: smsResult.provider,
-        ...(smsResult.demoOTP && { demoOTP: smsResult.demoOTP }) // Only in demo mode
+        ...(smsResult.demoOTP && { demoOTP: smsResult.demoOTP })
       });
     } else {
       throw new Error('Failed to send SMS');
