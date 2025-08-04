@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeLedger - OTP Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .title {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #34495e;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .success {
+            background: #2ecc71;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .hidden {
+            display: none;
+        }
+        .balance-info {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .balance-amount {
+            font-size: 24px;
+            font-weight: bold;
+            color: #27ae60;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">🏪 VibeLedger</h1>
+        
+        <!-- Phone Input Screen -->
+        <div id="phoneScreen">
+            <div class="input-group">
+                <label for="phoneNumber">Mobile Number</label>
+                <input type="tel" id="phoneNumber" placeholder="+91 98765 43210" value="+919876543210">
+            </div>
+            <button onclick="requestOTP()">Send OTP</button>
+        </div>
+
+        <!-- OTP Verification Screen -->
+        <div id="otpScreen" class="hidden">
+            <div class="input-group">
+                <label for="otpInput">Enter OTP</label>
+                <input type="text" id="otpInput" placeholder="123456" maxlength="6">
+                <small>Use: 123456 (demo OTP)</small>
+            </div>
+            <button onclick="verifyOTP()">Verify OTP</button>
+            <button onclick="goBack()" style="background: #95a5a6; margin-top: 10px;">Back</button>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div id="dashboardScreen" class="hidden">
+            <h2>Welcome! 🎉</h2>
+            <div class="balance-info">
+                <div class="balance-amount" id="balanceAmount">₹ 0.00</div>
+                <div style="text-align: center; color: #7f8c8d;">Wallet Balance</div>
+            </div>
+            <button onclick="logout()" style="background: #e74c3c; margin-top: 20px;">Logout</button>
+        </div>
+
+        <!-- Messages -->
+        <div id="message"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://10.149.10.213:3000/api';
+        let currentOtpId = null;
+        let authToken = null;
+
+        function showMessage(text, type = 'success') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = text;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        function showScreen(screenId) {
+            ['phoneScreen', 'otpScreen', 'dashboardScreen'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        async function requestOTP() {
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            
+            if (!phoneNumber.trim()) {
+                showMessage('Please enter a phone number', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/request-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phoneNumber })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentOtpId = data.otpId;
+                    showMessage('OTP sent successfully!');
+                    showScreen('otpScreen');
+                } else {
+                    showMessage(data.message || 'Failed to send OTP', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error. Please check connection.', 'error');
+                console.error('OTP request error:', error);
+            }
+        }
+
+        async function verifyOTP() {
+            const otp = document.getElementById('otpInput').value;
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            
+            if (!otp.trim()) {
+                showMessage('Please enter OTP', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ otpId: currentOtpId, otp, phoneNumber })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    showMessage('Login successful!');
+                    await loadDashboard();
+                } else {
+                    showMessage(data.message || 'Invalid OTP', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error. Please check connection.', 'error');
+                console.error('OTP verify error:', error);
+            }
+        }
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/wallet/balance`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.balance !== undefined) {
+                    // Convert USD to INR (approximate rate: 1 USD = 84 INR)
+                    const inrBalance = (data.balance * 84).toFixed(2);
+                    document.getElementById('balanceAmount').textContent = `₹ ${inrBalance}`;
+                    showScreen('dashboardScreen');
+                } else {
+                    showMessage('Failed to load wallet balance', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to load dashboard', 'error');
+                console.error('Dashboard load error:', error);
+            }
+        }
+
+        function goBack() {
+            showScreen('phoneScreen');
+        }
+
+        function logout() {
+            authToken = null;
+            currentOtpId = null;
+            document.getElementById('phoneNumber').value = '+919876543210';
+            document.getElementById('otpInput').value = '';
+            showScreen('phoneScreen');
+        }
+    </script>
+</body>
+</html>

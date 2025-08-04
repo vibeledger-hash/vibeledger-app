@@ -1,0 +1,14 @@
+{
+  "name": "microshield-backend-deploy",
+  "version": "1.0.0",
+  "description": "MicroShield Backend for Render deployment",
+  "main": "backend/standalone-server.js",
+  "scripts": {
+    "start": "cd backend && node standalone-server.js",
+    "build": "cd backend && npm install"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}

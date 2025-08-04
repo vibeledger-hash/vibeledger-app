@@ -13,7 +13,7 @@ import {
 import { BleManager } from 'react-native-ble-plx';
 import { bleApi } from '../services/bleApiService';
 
-const BLEPairingScreen = ({ navigation }) => {
+const BLEPairingScreen = ({ onPairingSuccess }) => {
   const [nearbyMerchants, setNearbyMerchants] = useState([]);
   const [bleDevices, setBleDevices] = useState([]);
   const [scanning, setScanning] = useState(false);
@@ -175,11 +175,8 @@ const BLEPairingScreen = ({ navigation }) => {
             `Connected to ${result.data.merchant.name}`,
             [
               {
-                text: 'Make Payment',
-                onPress: () => navigation.navigate('PaymentScreen', {
-                  merchant: result.data.merchant,
-                  paymentMethod: 'ble'
-                })
+                text: 'Continue to Wallet',
+                onPress: onPairingSuccess
               },
               {
                 text: 'OK',

@@ -228,10 +228,12 @@ app.use('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces
 
-app.listen(PORT, () => {
-  console.log(`🚀 MicroShield Backend Server running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 MicroShield Backend Server running on ${HOST}:${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
+  console.log(`📍 Remote access: http://10.149.10.213:${PORT}/health`);
   console.log(`📚 API docs: http://localhost:${PORT}/api/docs`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
