@@ -1,6 +1,6 @@
 // Configuration for VibeLedger App
 export const CONFIG = {
-  // API Configuration - Use deployed backend
+  // API Configuration - Use deployed backend with real SMS
   API_BASE_URL: 'https://vibeledger-app.onrender.com/api',
   
   // For Android emulator, use: 'http://10.0.2.2:3000'

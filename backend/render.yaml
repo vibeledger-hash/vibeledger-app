@@ -1,15 +1,93 @@
 services:
   - type: web
-    name: microshield-backend
+    name: vibeledger-backend
     runtime: node
     plan: free
-    buildCommand: npm run build
+    buildCommand: npm install
     startCommand: npm start
     envVars:
+      # Environment Configuration
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3000
+      - key: HOST
+        value: 0.0.0.0
+      
+      # SMS Provider Configuration (credentials set in Render dashboard)
+      - key: SMS_PROVIDER
+        value: twilio
+      
+      # SMS Rate Limiting
+      - key: SMS_RATE_LIMIT_PER_MINUTE
+        value: 2
+      - key: SMS_RATE_LIMIT_PER_HOUR
+        value: 10
+      - key: SMS_RATE_LIMIT_PER_DAY
+        value: 50
+      
+      # OTP Configuration
+      - key: OTP_LENGTH
+        value: 6
+      - key: OTP_EXPIRY_MINUTES
+        value: 5
+      - key: OTP_MAX_ATTEMPTS
+        value: 3
+      - key: OTP_CLEANUP_INTERVAL_MINUTES
+        value: 10
+      
+      # JWT & Security Configuration
       - key: JWT_SECRET
         value: 0d87884270dc6db52f58454d0cd84e4d
       - key: JWT_EXPIRES_IN
         value: 24h
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      
+      # API Security
+      - key: API_RATE_LIMIT_WINDOW_MINUTES
+        value: 15
+      - key: API_RATE_LIMIT_MAX_REQUESTS
+        value: 100
+      
+      # Logging & Monitoring
+      - key: LOG_LEVEL
+        value: info
+      - key: LOG_FORMAT
+        value: combined
+      - key: ENABLE_REQUEST_LOGGING
+        value: true
+      - key: ENABLE_ERROR_TRACKING
+        value: true
+      
+      # CORS & API Configuration
+      - key: CORS_ORIGIN
+        value: "*"
+      
+      # Deployment Configuration
+      - key: HEALTH_CHECK_ENABLED
+        value: true
+      - key: HEALTH_CHECK_PATH
+        value: /health
+      - key: ENABLE_COMPRESSION
+        value: true
+      - key: ENABLE_HELMET_SECURITY
+        value: true
+      - key: TRUST_PROXY
+        value: true
+      
+      # Testing Configuration
+      - key: TEST_PHONE_NUMBERS
+        value: "+919007320527,+13186121926"
+      - key: ENABLE_TEST_ENDPOINTS
+        value: false
+      
+      # Debug Settings
+      - key: DEBUG_SMS
+        value: false
+      - key: DEBUG_OTP
+        value: false
+      - key: DEBUG_AUTH
+        value: false
+    
     autoDeploy: true

@@ -479,26 +479,13 @@ function App() {
             Enter the {CONFIG.OTP_LENGTH}-digit code sent to {phoneNumber}
           </Text>
           
-          {/* OTP Status Notice */}
-          <View style={[styles.customerBalanceContainer, { marginBottom: 20 }]}>
-            <Text style={styles.customerBalanceLabel}>
-              {isRealSMSMode ? '📱 Live SMS Sent' : '🔑 Demo Mode'}
-            </Text>
-            <Text style={styles.customerBalanceAmount}>
-              {isRealSMSMode ? 'Check your phone for OTP' : 'Use OTP: 123456'}
-            </Text>
-            <Text style={styles.customerBalanceSubtext}>
-              {isRealSMSMode ? 'Real SMS delivered via Twilio' : 'This is a demo - no SMS sent'}
-            </Text>
-          </View>
-          
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, { marginTop: 30 }]}>
             <Text style={styles.inputLabel}>OTP Code</Text>
             <TextInput
               style={styles.otpInput}
               value={otp}
               onChangeText={setOtp}
-              placeholder={isRealSMSMode ? "Enter OTP" : "123456"}
+              placeholder="Enter OTP"
               keyboardType="numeric"
               maxLength={CONFIG.OTP_LENGTH}
               secureTextEntry={false}
