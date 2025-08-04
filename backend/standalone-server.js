@@ -244,24 +244,35 @@ app.get('/api/ble/devices', (req, res) => {
   });
 });
 
-app.post('/api/ble/pair', (req, res) => {
-  const { deviceId, pinCode } = req.body;
-
-  if (!deviceId || !pinCode) {
-    return res.status(400).json({
-      error: 'Device ID and PIN code required'
-    });
-  }
-
-  // Mock pairing
+// BLE endpoint
+app.post('/api/ble/pair', async (req, res) => {
+  const { deviceId, userId } = req.body;
+  
+  // Simulate BLE pairing
   res.json({
     success: true,
-    message: 'Device paired successfully',
     deviceId,
-    pairId: `pair_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    expiresAt: new Date(Date.now() + 86400000).toISOString() // 24 hours
+    userId,
+    status: 'paired',
+    message: 'Device paired successfully'
   });
 });
+
+// SMS Configuration endpoint for debugging
+app.get('/api/sms/status', (req, res) => {
+  const smsConfig = require('./config/sms-config');
+  const summary = smsConfig.getConfigSummary();
+  
+  res.json({
+    provider: process.env.SMS_PROVIDER || 'demo',
+    isRealSMS: summary.isRealSMS,
+    availableProviders: summary.providers,
+    twilioConfigured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    message: summary.message
+  });
+});
+
+// 404 handler
 
 // API documentation endpoint
 app.get('/api/docs', (req, res) => {
@@ -305,6 +316,7 @@ app.use('*', (req, res) => {
     availableEndpoints: [
       'GET /health',
       'GET /api/docs',
+      'GET /api/sms/status',
       'POST /api/auth/request-otp',
       'POST /api/auth/verify-otp',
       'GET /api/wallet/balance',
