@@ -30,13 +30,24 @@ class SMSService {
 
   setupTwilio() {
     try {
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+        console.error('❌ Twilio credentials missing:', {
+          hasSID: !!process.env.TWILIO_ACCOUNT_SID,
+          hasToken: !!process.env.TWILIO_AUTH_TOKEN,
+          hasFromNumber: !!process.env.TWILIO_FROM_NUMBER
+        });
+        this.provider = 'demo';
+        return;
+      }
+      
       this.twilio = require('twilio')(
         process.env.TWILIO_ACCOUNT_SID,
         process.env.TWILIO_AUTH_TOKEN
       );
-      console.log('📱 SMS Service: Twilio initialized');
+      console.log('📱 SMS Service: Twilio initialized successfully');
     } catch (error) {
       console.error('❌ Twilio setup failed:', error.message);
+      console.error('❌ Full error:', error);
       this.provider = 'demo';
     }
   }

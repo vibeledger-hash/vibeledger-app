@@ -261,13 +261,22 @@ app.post('/api/ble/pair', async (req, res) => {
 // SMS Configuration endpoint for debugging
 app.get('/api/sms/status', (req, res) => {
   const smsConfig = require('./config/sms-config');
+  const smsService = require('./services/sms');
   const summary = smsConfig.getConfigSummary();
   
   res.json({
     provider: process.env.SMS_PROVIDER || 'demo',
+    actualProvider: smsService.provider,
     isRealSMS: summary.isRealSMS,
     availableProviders: summary.providers,
     twilioConfigured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    twilioFromNumber: !!process.env.TWILIO_FROM_NUMBER,
+    credentials: {
+      hasTwilioSID: !!process.env.TWILIO_ACCOUNT_SID,
+      hasTwilioToken: !!process.env.TWILIO_AUTH_TOKEN,
+      hasTwilioFromNumber: !!process.env.TWILIO_FROM_NUMBER,
+      smsProvider: process.env.SMS_PROVIDER
+    },
     message: summary.message
   });
 });
