@@ -1,10 +1,11 @@
 services:
   - type: web
-    name: vibeledger-backend
-    runtime: node
+    name: vibeledger-app
+    env: node
     plan: free
     buildCommand: npm install
     startCommand: npm start
+    # Deploy timestamp: 2025-08-04
     envVars:
       # Environment Configuration
       - key: NODE_ENV
