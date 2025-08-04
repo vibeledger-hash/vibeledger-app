@@ -17,8 +17,13 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  FlatList,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import apiService from './src/services/api';
+import bluetoothService from './src/services/bluetooth';
 import { CONFIG } from './src/config';
 
 function App() {
@@ -37,22 +42,85 @@ function App() {
   const [successData, setSuccessData] = useState({ amount: '', customer: '' });
   const [customerMobile, setCustomerMobile] = useState('');
   const [amount, setAmount] = useState('');
+  const [isRealSMSMode, setIsRealSMSMode] = useState(!CONFIG.DEMO_MODE);
+
+  // Bluetooth states
+  const [isBluetoothScanning, setIsBluetoothScanning] = useState(false);
+  const [discoveredDevices, setDiscoveredDevices] = useState([]);
+  const [connectedDevice, setConnectedDevice] = useState(null);
+  const [bluetoothError, setBluetoothError] = useState(null);
 
   // Initialize app and check for existing authentication
   useEffect(() => {
     initializeApp();
+    
+    // Cleanup function
+    return () => {
+      // Clean up Bluetooth service when component unmounts
+      if (bluetoothService.getIsScanning()) {
+        bluetoothService.stopScan();
+      }
+    };
   }, []);
 
   const initializeApp = async () => {
     try {
+      console.log('🚀 === VibeLedger App Initialization ===');
+      console.log('📱 App Version: Real-Time v1.0.0');
+      console.log('🌐 API Base URL:', CONFIG.API_BASE_URL);
+      console.log('📱 OTP Length:', CONFIG.OTP_LENGTH);
+      console.log('⏰ Current Time:', new Date().toISOString());
+      
       await apiService.init();
+      console.log('✅ API Service initialized successfully');
+      
+      // Check SMS provider status
+      await checkSMSProviderStatus();
+      
       if (apiService.isAuthenticated()) {
+        console.log('✅ User already authenticated, loading wallet...');
         setIsAuthenticated(true);
         setCurrentScreen('wallet');
         await loadWalletData();
+      } else {
+        console.log('❌ User not authenticated, showing login screen');
+        setMessage('Welcome! Enter your phone number to continue.');
+        setTimeout(() => setMessage(''), 3000);
       }
     } catch (error) {
-      console.error('Failed to initialize app:', error);
+      console.error('❌ Failed to initialize app:', error);
+      setMessage(`Initialization failed: ${error.message}`);
+      setTimeout(() => setMessage(''), 8000);
+    }
+  };
+
+  const checkSMSProviderStatus = async () => {
+    try {
+      console.log('📱 Checking SMS provider status...');
+      const response = await fetch(`${CONFIG.API_BASE_URL.replace('/api', '')}/health`);
+      const healthData = await response.json();
+      
+      // Try to get more detailed status
+      try {
+        const configResponse = await fetch(`${CONFIG.API_BASE_URL.replace('/api', '')}/api/system/config`);
+        if (configResponse.ok) {
+          const configData = await configResponse.json();
+          setIsRealSMSMode(configData.smsProvider !== 'demo');
+          console.log('✅ SMS Provider detected:', configData.smsProvider);
+        } else {
+          // Fallback to config-based detection
+          setIsRealSMSMode(!CONFIG.DEMO_MODE);
+          console.log('📱 Using config-based SMS mode:', !CONFIG.DEMO_MODE);
+        }
+      } catch (configError) {
+        // Fallback to config-based detection
+        setIsRealSMSMode(!CONFIG.DEMO_MODE);
+        console.log('📱 Using config-based SMS mode (fallback):', !CONFIG.DEMO_MODE);
+      }
+    } catch (error) {
+      console.error('❌ Failed to check SMS provider:', error);
+      // Fallback to config-based detection
+      setIsRealSMSMode(!CONFIG.DEMO_MODE);
     }
   };
 
@@ -80,17 +148,51 @@ function App() {
 
     try {
       setLoading(true);
-      setMessage('Requesting OTP...');
+      setMessage('Connecting to server...');
+      
+      console.log('📱 === OTP REQUEST START ===');
+      console.log('📞 Phone Number:', phoneNumber);
+      console.log('🌐 API Base URL:', CONFIG.API_BASE_URL);
+      console.log('🔗 Full URL will be:', `${CONFIG.API_BASE_URL}/auth/request-otp`);
       
       const response = await apiService.requestOTP(phoneNumber);
-      setOtpId(response.otpId);
-      setCurrentScreen('otp');
-      setMessage(`OTP sent to ${response.phoneNumber}`);
-      setTimeout(() => setMessage(''), 3000);
+      console.log('✅ === OTP REQUEST SUCCESS ===');
+      console.log('📦 Response:', JSON.stringify(response, null, 2));
+      
+      if (response && response.otpId) {
+        setOtpId(response.otpId);
+        setCurrentScreen('otp');
+        
+        // Handle different OTP modes
+        if (response.provider === 'demo' && response.demoOTP) {
+          setMessage(`✅ Demo OTP generated: ${response.demoOTP}`);
+        } else {
+          setMessage(`✅ OTP sent to ${response.phoneNumber || phoneNumber}`);
+        }
+        
+        setTimeout(() => setMessage(''), 8000);
+      } else {
+        console.error('❌ Invalid response structure:', response);
+        setMessage('Invalid response from server');
+        setTimeout(() => setMessage(''), 5000);
+      }
     } catch (error) {
-      console.error('Failed to request OTP:', error);
-      setMessage('Failed to send OTP. Please try again.');
-      setTimeout(() => setMessage(''), 3000);
+      console.error('❌ === OTP REQUEST FAILED ===');
+      console.error('💥 Error:', error);
+      console.error('📄 Error message:', error.message);
+      console.error('🔍 Error stack:', error.stack);
+      
+      let errorMessage = 'Failed to send OTP';
+      if (error.message.includes('Network')) {
+        errorMessage = 'Network error. Check your internet connection.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'Request timeout. Please try again.';
+      } else if (error.message) {
+        errorMessage = `Error: ${error.message}`;
+      }
+      
+      setMessage(errorMessage);
+      setTimeout(() => setMessage(''), 8000);
     } finally {
       setLoading(false);
     }
@@ -106,19 +208,23 @@ function App() {
     try {
       setLoading(true);
       setMessage('Verifying OTP...');
+      
+      console.log('🔐 Verifying OTP:', otp, 'for ID:', otpId);
 
       const response = await apiService.verifyOTP(otpId, otp, phoneNumber);
+      console.log('✅ OTP Verification Response:', response);
       
       if (response.success) {
+        console.log('🎉 Authentication successful!');
         setIsAuthenticated(true);
         setMessage('');
         setCurrentScreen('wallet');
         await loadWalletData();
       }
     } catch (error) {
-      console.error('OTP verification failed:', error);
-      setMessage('Invalid OTP. Please try again.');
-      setTimeout(() => setMessage(''), 3000);
+      console.error('❌ OTP verification failed:', error);
+      setMessage(`Invalid OTP: ${error.message}`);
+      setTimeout(() => setMessage(''), 5000);
     } finally {
       setLoading(false);
     }
@@ -253,95 +359,193 @@ function App() {
     setCurrentScreen('wallet');
   };
 
-  // Phone number input screen
+    // Phone number input screen
   const renderPhoneScreen = () => {
+    const testNetworkConnection = async () => {
+      try {
+        setMessage('Testing connection...');
+        console.log('🧪 === NETWORK TEST START ===');
+        
+        // Test health endpoint
+        const healthResponse = await fetch('https://vibeledger-app.onrender.com/health');
+        const healthData = await healthResponse.json();
+        console.log('✅ Health check:', healthData);
+        
+        // Test OTP endpoint directly
+        const otpResponse = await fetch('https://vibeledger-app.onrender.com/api/auth/request-otp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ phoneNumber: '+919876543210' })
+        });
+        
+        const otpData = await otpResponse.json();
+        console.log('✅ Direct OTP test:', otpData);
+        
+        setMessage(`✅ Network OK! Health: ${healthData.status}, OTP: ${otpData.success ? 'Working' : 'Failed'}`);
+        setTimeout(() => setMessage(''), 5000);
+        
+      } catch (error) {
+        console.error('❌ Network test failed:', error);
+        setMessage(`❌ Network test failed: ${error.message}`);
+        setTimeout(() => setMessage(''), 8000);
+      }
+    };
+
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>VibeLedger Merchant</Text>
-        <Text style={styles.subtitle}>Enter your phone number to get started</Text>
-        
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Phone Number</Text>
-          <TextInput
-            style={styles.textInput}
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            placeholder="+91 XXXXX XXXXX"
-            keyboardType="phone-pad"
-            maxLength={15}
-            editable={!loading}
-          />
-        </View>
-        
-        <TouchableOpacity 
-          style={[styles.primaryButton, loading && styles.disabledButton]}
-          onPress={handlePhoneSubmit}
-          disabled={loading}
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          style={styles.container}
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Send OTP</Text>
-          )}
-        </TouchableOpacity>
-        
-        {message ? (
-          <Text style={styles.messageText}>{message}</Text>
-        ) : null}
-      </View>
+          <Text style={styles.title}>VibeLedger Merchant</Text>
+          <Text style={styles.subtitle}>Enter your phone number to get started</Text>
+          
+          {/* Status Notice */}
+          <View style={[styles.customerBalanceContainer, { marginBottom: 20 }]}>
+            <Text style={styles.customerBalanceLabel}>
+              {isRealSMSMode ? '✅ Live Mode Active' : '🚀 Demo Mode Active'}
+            </Text>
+            <Text style={styles.customerBalanceAmount}>Real-time Backend Connected</Text>
+            <Text style={styles.customerBalanceSubtext}>
+              {isRealSMSMode ? 'Real SMS will be sent to your phone' : 'Next step: OTP will be 123456'}
+            </Text>
+          </View>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Phone Number</Text>
+            <TextInput
+              style={styles.textInput}
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              placeholder="+91 XXXXX XXXXX"
+              keyboardType="phone-pad"
+              maxLength={15}
+              editable={!loading}
+            />
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.primaryButton, loading && styles.disabledButton]}
+            onPress={handlePhoneSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Send OTP</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Temporary Network Test Button */}
+          <TouchableOpacity 
+            style={[styles.secondaryButton, { backgroundColor: '#e67e22', marginTop: 10, paddingVertical: 10, borderRadius: 8 }]}
+            onPress={testNetworkConnection}
+            disabled={loading}
+          >
+            <Text style={[styles.primaryButtonText, { color: '#fff' }]}>🔧 Test Network</Text>
+          </TouchableOpacity>
+          
+          {message ? (
+            <Text style={styles.messageText}>{message}</Text>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   };
 
   const renderOTPScreen = () => {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Verify OTP</Text>
-        <Text style={styles.subtitle}>
-          Enter the {CONFIG.OTP_LENGTH}-digit code sent to {phoneNumber}
-        </Text>
-        
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>OTP Code</Text>
-          <TextInput
-            style={styles.otpInput}
-            value={otp}
-            onChangeText={setOtp}
-            placeholder="000000"
-            keyboardType="numeric"
-            maxLength={CONFIG.OTP_LENGTH}
-            secureTextEntry={false}
-            editable={!loading}
-          />
-        </View>
-        
-        <TouchableOpacity 
-          style={[styles.primaryButton, loading && styles.disabledButton]}
-          onPress={handleOTPVerification}
-          disabled={loading}
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          style={styles.container}
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Verify OTP</Text>
+          <Text style={styles.title}>Verify OTP</Text>
+          <Text style={styles.subtitle}>
+            Enter the {CONFIG.OTP_LENGTH}-digit code sent to {phoneNumber}
+          </Text>
+          
+          {/* OTP Status Notice */}
+          <View style={[styles.customerBalanceContainer, { marginBottom: 20 }]}>
+            <Text style={styles.customerBalanceLabel}>
+              {isRealSMSMode ? '📱 Live SMS Sent' : '🔑 Demo Mode'}
+            </Text>
+            <Text style={styles.customerBalanceAmount}>
+              {isRealSMSMode ? 'Check your phone for OTP' : 'Use OTP: 123456'}
+            </Text>
+            <Text style={styles.customerBalanceSubtext}>
+              {isRealSMSMode ? 'Real SMS delivered via Twilio' : 'This is a demo - no SMS sent'}
+            </Text>
+          </View>
+          
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>OTP Code</Text>
+            <TextInput
+              style={styles.otpInput}
+              value={otp}
+              onChangeText={setOtp}
+              placeholder={isRealSMSMode ? "Enter OTP" : "123456"}
+              keyboardType="numeric"
+              maxLength={CONFIG.OTP_LENGTH}
+              secureTextEntry={false}
+              editable={!loading}
+            />
+          </View>
+          
+          {/* Quick Fill Button - Only show in demo mode */}
+          {!isRealSMSMode && (
+            <TouchableOpacity 
+              style={[styles.secondaryButton, { backgroundColor: '#27ae60', marginTop: 10, paddingVertical: 10, borderRadius: 8 }]}
+              onPress={() => setOtp('123456')}
+              disabled={loading}
+            >
+              <Text style={[styles.primaryButtonText, { color: '#fff' }]}>Fill Demo OTP</Text>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.primaryButton, loading && styles.disabledButton]}
+            onPress={handleOTPVerification}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Verify OTP</Text>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.secondaryButton}
-          onPress={() => {
-            setCurrentScreen('phone');
-            setOtp('');
-            setMessage('');
-          }}
-          disabled={loading}
-        >
-          <Text style={styles.secondaryButtonText}>Change Phone Number</Text>
-        </TouchableOpacity>
-        
-        {message ? (
-          <Text style={styles.messageText}>{message}</Text>
-        ) : null}
-      </View>
+          <TouchableOpacity 
+            style={styles.secondaryButton}
+            onPress={() => {
+              setCurrentScreen('phone');
+              setOtp('');
+              setMessage('');
+            }}
+            disabled={loading}
+          >
+            <Text style={styles.secondaryButtonText}>Change Phone Number</Text>
+          </TouchableOpacity>
+          
+          {message ? (
+            <Text style={styles.messageText}>{message}</Text>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   };
 
@@ -354,7 +558,12 @@ function App() {
     ];
 
     return (
-      <View style={styles.container}>
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.walletTitle}>VibeLedger Merchant</Text>
         
         <View style={styles.balanceContainer}>
@@ -390,57 +599,68 @@ function App() {
             ))}
           </View>
         </View>
-      </View>
+      </ScrollView>
     );
   };
 
   const renderReceivePaymentScreen = () => {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Receive Payment</Text>
-        
-        <View style={styles.formContainer}>
-          <Text style={styles.inputLabel}>Customer Mobile No</Text>
-          <TextInput
-            style={styles.textInput}
-            value={customerMobile}
-            onChangeText={setCustomerMobile}
-            placeholder="+91 XXXXX XXXXX"
-            keyboardType="phone-pad"
-            editable={!loading}
-          />
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          style={styles.container}
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.title}>Receive Payment</Text>
           
-          <Text style={styles.inputLabel}>Amount (₹)</Text>
-          <TextInput
-            style={styles.textInput}
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="0.00"
-            keyboardType="numeric"
-            editable={!loading}
-          />
-          
-          <TouchableOpacity 
-            style={[styles.primaryButton, loading && styles.disabledButton]}
-            onPress={handleReceivePayment}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Receive Payment</Text>
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.secondaryButton}
-            onPress={() => setCurrentScreen('wallet')}
-            disabled={loading}
-          >
-            <Text style={styles.secondaryButtonText}>Back to Dashboard</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+          <View style={styles.formContainer}>
+            <Text style={styles.inputLabel}>Customer Mobile No</Text>
+            <TextInput
+              style={styles.textInput}
+              value={customerMobile}
+              onChangeText={setCustomerMobile}
+              placeholder="+91 XXXXX XXXXX"
+              keyboardType="phone-pad"
+              editable={!loading}
+            />
+            
+            <Text style={styles.inputLabel}>Amount (₹)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0.00"
+              keyboardType="numeric"
+              editable={!loading}
+            />
+            
+            <TouchableOpacity 
+              style={[styles.primaryButton, loading && styles.disabledButton]}
+              onPress={handleReceivePayment}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Receive Payment</Text>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.secondaryButton}
+              onPress={() => setCurrentScreen('wallet')}
+              disabled={loading}
+            >
+              <Text style={styles.secondaryButtonText}>Back to Dashboard</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     );
   };
 
@@ -452,7 +672,12 @@ function App() {
     ];
 
     return (
-      <View style={styles.container}>
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>Transaction History</Text>
         
         <View style={styles.transactionsList}>
@@ -480,19 +705,208 @@ function App() {
         >
           <Text style={styles.secondaryButtonText}>Back to Dashboard</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     );
   };
 
   const renderBLEPairingScreen = () => {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>BLE Pairing</Text>
-        <Text style={styles.subtitle}>Connect with nearby payment devices</Text>
+    const startBluetoothScan = async () => {
+      try {
+        setBluetoothError(null);
+        setDiscoveredDevices([]);
+        setIsBluetoothScanning(true);
+        setMessage('Starting Bluetooth scan...');
+
+        console.log('🔵 === BLUETOOTH SCAN START ===');
+
+        await bluetoothService.startScan(
+          (devices) => {
+            console.log('📡 Devices found:', devices.length);
+            setDiscoveredDevices(devices);
+            setMessage(`Found ${devices.length} device(s)`);
+          },
+          (error) => {
+            console.error('❌ Bluetooth scan error:', error);
+            setBluetoothError(error.message);
+            setMessage(`Scan failed: ${error.message}`);
+            setIsBluetoothScanning(false);
+          }
+        );
+      } catch (error) {
+        console.error('❌ Failed to start Bluetooth scan:', error);
+        setBluetoothError(error.message);
+        setMessage(`Failed to start scan: ${error.message}`);
+        setIsBluetoothScanning(false);
+      }
+    };
+
+    const stopBluetoothScan = () => {
+      console.log('⏹️ Stopping Bluetooth scan...');
+      bluetoothService.stopScan();
+      setIsBluetoothScanning(false);
+      setMessage('Scan stopped');
+      setTimeout(() => setMessage(''), 2000);
+    };
+
+    const connectToDevice = async (device) => {
+      try {
+        setMessage(`Connecting to ${device.name}...`);
+        console.log('🔗 Connecting to device:', device);
         
-        <View style={styles.bleContainer}>
-          <Text style={styles.bleStatus}>🔍 Scanning for devices...</Text>
-          <Text style={styles.bleInfo}>Make sure Bluetooth is enabled</Text>
+        const connectedDev = await bluetoothService.connectToDevice(device.id);
+        setConnectedDevice(connectedDev);
+        setMessage(`✅ Connected to ${device.name}`);
+        
+        // Stop scanning when connected
+        if (isBluetoothScanning) {
+          stopBluetoothScan();
+        }
+        
+        setTimeout(() => setMessage(''), 3000);
+      } catch (error) {
+        console.error('❌ Connection failed:', error);
+        setMessage(`Connection failed: ${error.message}`);
+        setTimeout(() => setMessage(''), 5000);
+      }
+    };
+
+    const disconnectDevice = async () => {
+      if (connectedDevice) {
+        try {
+          await bluetoothService.disconnectDevice(connectedDevice.id);
+          setConnectedDevice(null);
+          setMessage('Device disconnected');
+          setTimeout(() => setMessage(''), 2000);
+        } catch (error) {
+          console.error('❌ Disconnection failed:', error);
+          setMessage(`Disconnection failed: ${error.message}`);
+          setTimeout(() => setMessage(''), 3000);
+        }
+      }
+    };
+
+    const renderDeviceItem = ({ item: device }) => (
+      <TouchableOpacity 
+        style={styles.deviceItem}
+        onPress={() => connectToDevice(device)}
+        disabled={!!connectedDevice}
+      >
+        <View style={styles.deviceInfo}>
+          <Text style={styles.deviceName}>{device.name || 'Unknown Device'}</Text>
+          <Text style={styles.deviceDetails}>
+            ID: {device.id.substring(0, 8)}... | RSSI: {device.rssi}dBm
+          </Text>
+          <Text style={styles.deviceStatus}>
+            {device.isConnectable ? '🟢 Connectable' : '🔴 Not Connectable'}
+          </Text>
+        </View>
+        {connectedDevice?.id === device.id && (
+          <Text style={styles.connectedBadge}>CONNECTED</Text>
+        )}
+      </TouchableOpacity>
+    );
+
+    return (
+      <ScrollView 
+        style={styles.container} 
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={true}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>BLE Device Scanner</Text>
+        <Text style={styles.subtitle}>Discover and connect to nearby Bluetooth devices</Text>
+        
+        {/* Connection Status */}
+        {connectedDevice && (
+          <View style={[styles.customerBalanceContainer, { backgroundColor: '#e8f5e8' }]}>
+            <Text style={styles.customerBalanceLabel}>🔗 Connected Device</Text>
+            <Text style={styles.customerBalanceAmount}>{connectedDevice.name}</Text>
+            <Text style={styles.customerBalanceSubtext}>ID: {connectedDevice.id.substring(0, 12)}...</Text>
+          </View>
+        )}
+
+        {/* Error Display */}
+        {bluetoothError && (
+          <View style={[styles.customerBalanceContainer, { backgroundColor: '#ffeaa7', borderColor: '#fdcb6e' }]}>
+            <Text style={[styles.customerBalanceLabel, { color: '#e17055' }]}>⚠️ Bluetooth Error</Text>
+            <Text style={[styles.customerBalanceAmount, { color: '#e17055', fontSize: 14 }]}>
+              {bluetoothError}
+            </Text>
+          </View>
+        )}
+        
+        {/* Control Buttons */}
+        <View style={styles.bleControlContainer}>
+          {!isBluetoothScanning ? (
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: '#3498db' }]}
+              onPress={startBluetoothScan}
+              disabled={!!connectedDevice}
+            >
+              <Text style={styles.primaryButtonText}>
+                🔍 Start Scan
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: '#e74c3c' }]}
+              onPress={stopBluetoothScan}
+            >
+              <Text style={styles.primaryButtonText}>
+                ⏹️ Stop Scan
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {connectedDevice && (
+            <TouchableOpacity 
+              style={[styles.primaryButton, { backgroundColor: '#f39c12', marginTop: 10 }]}
+              onPress={disconnectDevice}
+            >
+              <Text style={styles.primaryButtonText}>
+                🔌 Disconnect
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Scanning Indicator */}
+        {isBluetoothScanning && (
+          <View style={styles.scanningContainer}>
+            <ActivityIndicator size="large" color="#3498db" />
+            <Text style={styles.scanningText}>Scanning for devices...</Text>
+          </View>
+        )}
+
+        {/* Device List */}
+        <View style={styles.deviceListContainer}>
+          <Text style={styles.deviceListTitle}>
+            Discovered Devices ({discoveredDevices.length})
+          </Text>
+          
+          {discoveredDevices.length === 0 && !isBluetoothScanning ? (
+            <View style={styles.emptyDeviceList}>
+              <Text style={styles.emptyDeviceText}>
+                No devices found. Tap "Start Scan" to discover nearby Bluetooth devices.
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={discoveredDevices}
+              keyExtractor={(item) => item.id}
+              renderItem={renderDeviceItem}
+              style={styles.deviceList}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              scrollEnabled={true}
+              initialNumToRender={10}
+              maxToRenderPerBatch={10}
+              windowSize={21}
+              removeClippedSubviews={true}
+            />
+          )}
         </View>
         
         <TouchableOpacity 
@@ -501,7 +915,11 @@ function App() {
         >
           <Text style={styles.secondaryButtonText}>Back to Dashboard</Text>
         </TouchableOpacity>
-      </View>
+
+        {message ? (
+          <Text style={styles.messageText}>{message}</Text>
+        ) : null}
+      </ScrollView>
     );
   };
 
@@ -556,9 +974,6 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
     backgroundColor: '#f5f5f5',
   },
   title: {
@@ -799,6 +1214,102 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     alignItems: 'center',
     width: '100%',
+  },
+  bleControlContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  scanningContainer: {
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  scanningText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#3498db',
+  },
+  deviceListContainer: {
+    flex: 1,
+    width: '100%',
+    marginBottom: 20,
+    minHeight: 200,
+  },
+  deviceListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+  },
+  deviceList: {
+    flex: 1,
+    minHeight: 200,
+    maxHeight: 500,
+  },
+  deviceItem: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ecf0f1',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  deviceInfo: {
+    flex: 1,
+  },
+  deviceName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 5,
+  },
+  deviceDetails: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    marginBottom: 3,
+  },
+  deviceStatus: {
+    fontSize: 12,
+    color: '#27ae60',
+  },
+  connectedBadge: {
+    backgroundColor: '#27ae60',
+    color: '#fff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  emptyDeviceList: {
+    padding: 30,
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+  },
+  emptyDeviceText: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 60,
+    minHeight: '100%',
   },
   bleStatus: {
     fontSize: 18,

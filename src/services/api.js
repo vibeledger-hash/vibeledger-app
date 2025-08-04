@@ -27,7 +27,6 @@ class ApiService {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      timeout: 10000, // 10 seconds timeout
       ...options,
     };
 
@@ -42,25 +41,58 @@ class ApiService {
     }
 
     try {
-      console.log(`API Request: ${config.method || 'GET'} ${url}`);
-      console.log('Request body:', config.body);
+      console.log(`🌐 API Request: ${config.method || 'GET'} ${url}`);
+      console.log('📦 Request body:', config.body);
+      console.log('🔑 Headers:', JSON.stringify(config.headers, null, 2));
       
-      const response = await fetch(url, config);
-      const data = await response.json();
+      // Create a promise with timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000)
+      );
+      
+      const fetchPromise = fetch(url, config);
+      
+      // Race between fetch and timeout
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      console.log(`✅ Response Status: ${response.status} ${response.statusText}`);
+      console.log('📄 Response Headers:', JSON.stringify([...response.headers.entries()], null, 2));
+      
+      const contentType = response.headers.get('content-type');
+      let data;
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        console.warn('⚠️ Non-JSON response:', text);
+        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`);
+      }
 
-      console.log('API Response:', response.status, data);
+      console.log('📦 API Response Data:', JSON.stringify(data, null, 2));
 
       if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(data.error || data.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       return data;
     } catch (error) {
-      console.error(`API Error for ${endpoint}:`, error);
+      console.error(`❌ API Error for ${endpoint}:`, error);
+      console.error('🔍 Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
       
-      // Check if it's a network error
-      if (error.message.includes('Network request failed') || error.message.includes('fetch')) {
-        throw new Error('Network connection failed. Please check your internet connection and backend server.');
+      // Enhanced error handling
+      if (error.message.includes('Network request failed')) {
+        throw new Error('Network connection failed. Please check your internet connection.');
+      } else if (error.message.includes('timeout')) {
+        throw new Error('Request timed out. Please try again.');
+      } else if (error.message.includes('Failed to fetch')) {
+        throw new Error('Unable to reach server. Please check if the backend is running.');
+      } else if (error.message.includes('JSON')) {
+        throw new Error('Server response format error. Please contact support.');
       }
       
       throw error;
@@ -69,14 +101,14 @@ class ApiService {
 
   // Authentication methods
   async requestOTP(phoneNumber) {
-    return this.request('/api/auth/request-otp', {
+    return this.request('/auth/request-otp', {
       method: 'POST',
       body: { phoneNumber, purpose: 'login' },
     });
   }
 
   async verifyOTP(otpId, otp, phoneNumber) {
-    const response = await this.request('/api/auth/verify-otp', {
+    const response = await this.request('/auth/verify-otp', {
       method: 'POST',
       body: { otpId, otp, phoneNumber },
     });
@@ -93,23 +125,23 @@ class ApiService {
 
   // Wallet methods
   async getBalance() {
-    return this.request('/api/wallet/balance');
+    return this.request('/wallet/balance');
   }
 
   async getTransactionHistory() {
-    return this.request('/api/wallet/history');
+    return this.request('/wallet/history');
   }
 
   // Transaction methods
   async initiateTransaction(recipientId, amount, description = '') {
-    return this.request('/api/transactions/send', {
+    return this.request('/transactions/send', {
       method: 'POST',
       body: { recipientId, amount, description },
     });
   }
 
   async confirmTransaction(transactionId, otp) {
-    return this.request('/api/transactions/confirm', {
+    return this.request('/transactions/confirm', {
       method: 'POST',
       body: { transactionId, otp },
     });
@@ -117,14 +149,14 @@ class ApiService {
 
   // BLE methods
   async registerMerchant(merchantData) {
-    return this.request('/api/ble/register', {
+    return this.request('/ble/register', {
       method: 'POST',
       body: merchantData,
     });
   }
 
   async discoverMerchants() {
-    return this.request('/api/ble/discover');
+    return this.request('/ble/discover');
   }
 
   // Utility methods

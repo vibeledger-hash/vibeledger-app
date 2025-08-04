@@ -7,7 +7,15 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "start:backend": "cd backend && node standalone-server.js",
+    "start:prod": "cd backend && NODE_ENV=production node standalone-server.js",
+    "setup:sms": "cd backend && node setup-sms.js",
+    "test:sms": "cd backend && node test-sms.js",
+    "deploy:dev": "cd backend && node deploy.js setup:dev",
+    "deploy:prod": "cd backend && node deploy.js deploy:prod",
+    "health": "cd backend && node deploy.js health",
+    "validate:config": "cd backend && node deploy.js validate"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",

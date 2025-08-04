@@ -1,9 +1,7 @@
 // Configuration for VibeLedger App
 export const CONFIG = {
-  // API Configuration
-  API_BASE_URL: __DEV__ 
-    ? 'http://10.149.10.213:3000'  // Your computer's IP for physical device
-    : 'https://your-production-backend.com', // Production URL
+  // API Configuration - Use deployed backend
+  API_BASE_URL: 'https://vibeledger-app.onrender.com/api',
   
   // For Android emulator, use: 'http://10.0.2.2:3000'
   // For iOS simulator, use: 'http://localhost:3000'

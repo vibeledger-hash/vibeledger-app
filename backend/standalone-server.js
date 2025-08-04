@@ -2,7 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-require('dotenv').config();
+const realTimeConfig = require('./config/realtime-config');
+
+// Import services
+const smsService = require('./services/sms');
+const otpService = require('./services/otp');
+const smsConfig = require('./config/sms-config');
 
 const app = express();
 
@@ -24,49 +29,133 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Mock Authentication Routes
-app.post('/api/auth/request-otp', (req, res) => {
-  const { phoneNumber, purpose } = req.body;
-  
-  // Validate phone number
-  if (!phoneNumber || !/^\+?[1-9]\d{9,14}$/.test(phoneNumber)) {
-    return res.status(400).json({
-      error: 'Invalid phone number format'
+// System configuration endpoint
+app.get('/api/system/config', (req, res) => {
+  try {
+    const smsConfig = realTimeConfig.getSMSConfig();
+    const otpConfig = realTimeConfig.getOTPConfig();
+    const features = realTimeConfig.getFeatureFlags();
+    
+    res.json({
+      smsProvider: smsConfig.provider,
+      smsEnabled: features.enableRealTimeSMS,
+      otpLength: otpConfig.length,
+      environment: realTimeConfig.getEnvironment(),
+      version: '1.0.0'
+    });
+  } catch (error) {
+    console.error('Error getting system config:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
     });
   }
-
-  // Mock OTP request
-  res.json({
-    success: true,
-    message: 'OTP sent successfully',
-    otpId: `otp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    expiresIn: 300, // 5 minutes
-    phoneNumber: phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') // Mask phone number
-  });
 });
 
-app.post('/api/auth/verify-otp', (req, res) => {
-  const { otpId, otp, phoneNumber } = req.body;
+// Real OTP Authentication Routes
+app.post('/api/auth/request-otp', async (req, res) => {
+  try {
+    const { phoneNumber, purpose } = req.body;
+    
+    // Validate phone number
+    if (!phoneNumber || !/^\+?[1-9]\d{9,14}$/.test(phoneNumber)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid phone number format'
+      });
+    }
 
-  // Mock OTP verification (accept any 6-digit code)
-  if (!otp || otp.length !== 6) {
-    return res.status(400).json({
-      error: 'Invalid OTP format'
+    // Check rate limiting
+    const rateLimitCheck = otpService.canRequestOTP(phoneNumber);
+    if (!rateLimitCheck.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: rateLimitCheck.reason,
+        waitTime: rateLimitCheck.waitTime
+      });
+    }
+
+    // Generate OTP and ID
+    const otp = otpService.generateOTP();
+    const otpId = otpService.generateOTPId();
+    
+    // Store OTP
+    otpService.storeOTP(otpId, phoneNumber, otp);
+    
+    // Send SMS
+    const smsResult = await smsService.sendOTP(phoneNumber, otp);
+    
+    if (smsResult.success) {
+      console.log(`✅ OTP sent successfully: ${otpId} to ${phoneNumber}`);
+      
+      res.json({
+        success: true,
+        message: smsResult.message,
+        otpId: otpId,
+        expiresIn: 300, // 5 minutes
+        phoneNumber: phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'), // Mask phone number
+        provider: smsResult.provider,
+        ...(smsResult.demoOTP && { demoOTP: smsResult.demoOTP }) // Only in demo mode
+      });
+    } else {
+      throw new Error('Failed to send SMS');
+    }
+    
+  } catch (error) {
+    console.error('❌ OTP request failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to send OTP'
     });
   }
+});
 
-  // Mock successful verification
-  res.json({
-    success: true,
-    message: 'OTP verified successfully',
-    token: `jwt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    expiresIn: 86400, // 24 hours
-    user: {
-      id: `user_${Math.random().toString(36).substr(2, 9)}`,
-      phoneNumber: phoneNumber,
-      createdAt: new Date().toISOString()
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const { otpId, otp, phoneNumber } = req.body;
+
+    // Validate input
+    if (!otpId || !otp || !phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: otpId, otp, phoneNumber'
+      });
     }
-  });
+
+    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({
+        success: false,
+        error: 'OTP must be exactly 6 digits'
+      });
+    }
+
+    // Verify OTP
+    const otpData = otpService.verifyOTP(otpId, otp, phoneNumber);
+    
+    // Generate JWT token (mock for now)
+    const token = `jwt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    console.log(`✅ OTP verification successful for ${phoneNumber}`);
+    
+    res.json({
+      success: true,
+      message: 'OTP verified successfully',
+      token: token,
+      expiresIn: 24 * 60 * 60, // 24 hours
+      user: {
+        id: `user_${Math.random().toString(36).substr(2, 9)}`,
+        phoneNumber: phoneNumber,
+        createdAt: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ OTP verification failed:', error);
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Mock Wallet Routes
@@ -227,15 +316,18 @@ app.use('*', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces
+const PORT = realTimeConfig.getAPIConfig().port;
+const HOST = realTimeConfig.getAPIConfig().host;
 
 app.listen(PORT, HOST, () => {
-  console.log(`🚀 MicroShield Backend Server running on ${HOST}:${PORT}`);
+  // Print real-time configuration summary
+  realTimeConfig.printSummary();
+  
+  console.log(`\n🚀 VibeLedger Backend Server running on ${HOST}:${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
   console.log(`📍 Remote access: http://10.149.10.213:${PORT}/health`);
   console.log(`📚 API docs: http://localhost:${PORT}/api/docs`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`� Production Ready: ${realTimeConfig.isProduction() ? 'Yes' : 'No'}`);
 });
 
 module.exports = app;

@@ -73,3 +73,13 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Environment files with credentials
+.env
+.env.local
+.env.development
+.env.production
+.env.prod
+backend/.env
+backend/.env.prod
+backend/.env.local
